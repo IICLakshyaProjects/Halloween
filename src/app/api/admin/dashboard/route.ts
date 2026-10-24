@@ -14,8 +14,8 @@ export async function GET(req: NextRequest) {
       queryOne<{ participants: number; active: number; official: number; empty: number; tests: number }>(
         `select (select count(*)::int from participants) as participants,
                 (count(*) filter (where state = 'in_progress'))::int as active,
-                (count(*) filter (where not is_test and state in ('submitted', 'expired')))::int as official,
-                (count(*) filter (where not is_test and state = 'expired_empty'))::int as empty,
+                (count(*) filter (where state in ('submitted', 'expired')))::int as official,
+                (count(*) filter (where state = 'expired_empty'))::int as empty,
                 (count(*) filter (where is_test))::int as tests
          from attempts where contest_id = $1`,
         [c.id],

@@ -54,11 +54,10 @@ create table if not exists attempts (
   check (deadline_at = started_at + interval '900 seconds')
 );
 
--- At most one in-progress attempt, and at most one official attempt, per participant per contest.
+-- At most one in-progress attempt per participant per contest. Repeat access is enforced atomically below.
 create unique index if not exists attempts_one_active
   on attempts (participant_id, contest_id) where state = 'in_progress';
-create unique index if not exists attempts_one_official
-  on attempts (participant_id, contest_id) where not is_test;
+drop index if exists attempts_one_official;
 create index if not exists attempts_due on attempts (deadline_at) where state = 'in_progress';
 create index if not exists attempts_contest_state on attempts (contest_id, state);
 
@@ -73,11 +72,15 @@ create table if not exists drawings (
 );
 
 create table if not exists winners (
-  contest_id uuid primary key references contests(id),
+  contest_id uuid not null references contests(id),
+  position integer not null default 1 check (position between 1 and 1000),
   attempt_id uuid not null unique references attempts(id),
   selected_by text not null,
-  selected_at timestamptz not null default now()
+  selected_at timestamptz not null default now(),
+  primary key (contest_id, attempt_id)
 );
+
+create index if not exists winners_contest_position on winners (contest_id, position, selected_at, attempt_id);
 
 create table if not exists audit_events (
   id bigserial primary key,
@@ -184,13 +187,11 @@ begin
     return jsonb_build_object('ok', false, 'code', 'too_late');
   end if;
 
-  select count(*) into v_official from attempts where participant_id = p_participant and contest_id = p_contest and not is_test;
-  if c.allow_repeat_attempts then
-    v_is_test := true;
-  else
-    if v_official > 0 then return jsonb_build_object('ok', false, 'code', 'already_used'); end if;
-    v_is_test := false;
+  select count(*) into v_official from attempts where participant_id = p_participant and contest_id = p_contest;
+  if not c.allow_repeat_attempts and v_official > 0 then
+    return jsonb_build_object('ok', false, 'code', 'already_used');
   end if;
+  v_is_test := false; -- Reattempts are ordinary entries; preserve legacy classification on existing rows.
 
   select coalesce(max(attempt_number), 0) + 1 into v_next from attempts where participant_id = p_participant and contest_id = p_contest;
   begin
@@ -298,24 +299,43 @@ begin
   return jsonb_build_object('ok', true, 'allow_repeat_attempts', p_value);
 end $$;
 
-create or replace function select_winner(p_contest uuid, p_attempt uuid, p_admin text) returns jsonb
+create or replace function select_ranked_winner(p_contest uuid, p_attempt uuid, p_admin text, p_position integer) returns jsonb
 language plpgsql as $$
-declare a attempts; pens int; prior uuid;
+declare a attempts; pens int; prior jsonb;
 begin
+  if p_position is null or p_position not between 1 and 1000 then
+    return jsonb_build_object('ok', false, 'code', 'invalid_position');
+  end if;
+  -- Serialize position edits while allowing any number of winners at the same position.
+  perform 1 from contests where id = p_contest for update;
+  if not found then return jsonb_build_object('ok', false, 'code', 'not_found'); end if;
   select * into a from attempts where id = p_attempt and contest_id = p_contest for share;
   if not found then return jsonb_build_object('ok', false, 'code', 'not_found'); end if;
   select stroke_count into pens from drawings where attempt_id = p_attempt;
-  if a.is_test or a.state not in ('submitted', 'expired') or coalesce(pens, 0) = 0 then
+  if a.state not in ('submitted', 'expired') or coalesce(pens, 0) = 0 then
     return jsonb_build_object('ok', false, 'code', 'ineligible');
   end if;
-  select attempt_id into prior from winners where contest_id = p_contest for update;
-  if prior is not distinct from p_attempt then return jsonb_build_object('ok', true, 'unchanged', true); end if;
-  insert into winners (contest_id, attempt_id, selected_by) values (p_contest, p_attempt, p_admin)
-    on conflict (contest_id) do update set attempt_id = excluded.attempt_id, selected_by = excluded.selected_by, selected_at = now();
+  if exists (select 1 from winners where contest_id = p_contest and position = p_position and attempt_id = p_attempt) then
+    return jsonb_build_object('ok', true, 'unchanged', true);
+  end if;
+  select coalesce(jsonb_agg(jsonb_build_object('position', position, 'attemptId', attempt_id) order by position, selected_at, attempt_id), '[]'::jsonb)
+    into prior from winners where contest_id = p_contest;
+  -- Change only this drawing's position. Other winners at either position are preserved.
+  insert into winners (contest_id, position, attempt_id, selected_by)
+    values (p_contest, p_position, p_attempt, p_admin)
+    on conflict (contest_id, attempt_id) do update
+      set position = excluded.position, selected_by = excluded.selected_by, selected_at = now();
   insert into audit_events (admin_id, action, record_type, record_id, prior_value, new_value)
-    values (p_admin, 'select_winner', 'contest', p_contest::text, to_jsonb(prior), to_jsonb(p_attempt));
-  return jsonb_build_object('ok', true);
+    values (p_admin, 'select_winner', 'contest', p_contest::text, prior,
+      jsonb_build_object('position', p_position, 'attemptId', p_attempt));
+  return jsonb_build_object('ok', true, 'position', p_position);
 end $$;
+
+-- Preserve compatibility with existing callers that select a single first-place winner.
+create or replace function select_winner(p_contest uuid, p_attempt uuid, p_admin text) returns jsonb
+language sql as $$
+  select select_ranked_winner(p_contest, p_attempt, p_admin, 1);
+$$;
 
 -- ---------------------------------------------------------------- seed
 

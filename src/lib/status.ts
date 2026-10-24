@@ -58,7 +58,7 @@ export async function employeeStatus(sess: EmployeeSession) {
 
   const latest = attempts[0] ?? null;
   const active = attempts.find((a) => a.state === "in_progress") ?? null;
-  const officialUsed = attempts.some((a) => !a.is_test);
+  const attemptUsed = attempts.length > 0;
 
   let attempt: Record<string, unknown> | null = null;
   if (active) {
@@ -91,7 +91,7 @@ export async function employeeStatus(sess: EmployeeSession) {
   let startBlock: string | null = null;
   if (!active) {
     startBlock = contestBlock(contest);
-    if (!startBlock && !contest.allow_repeat_attempts && officialUsed) startBlock = "already_used";
+    if (!startBlock && !contest.allow_repeat_attempts && attemptUsed) startBlock = "already_used";
   }
 
   return {
@@ -99,7 +99,6 @@ export async function employeeStatus(sess: EmployeeSession) {
     contest: {
       title: contest.title,
       instructions: contest.instructions,
-      testing: contest.allow_repeat_attempts,
       opensAtText: contest.opens_at ? formatInZone(contest.opens_at, contest.timezone) : null,
       lastStartText: contest.closes_at ? formatInZone(lastStartAt(contest), contest.timezone) : null,
       closesAtText: contest.closes_at ? formatInZone(contest.closes_at, contest.timezone) : null,

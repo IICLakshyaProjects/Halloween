@@ -19,7 +19,7 @@ function Web({ className }: { className: string }) {
   );
 }
 
-export default function HalloweenFx() {
+export default function HalloweenFx({ floatingSymbol = "👻" }: { floatingSymbol?: string } = {}) {
   return (
     <div className="fx-root" aria-hidden="true">
       <div className="fx-fog fx-fog-a" />
@@ -35,8 +35,8 @@ export default function HalloweenFx() {
           🦇
         </span>
       ))}
-      <span className="fx-ghost fx-ghost-a">👻</span>
-      <span className="fx-ghost fx-ghost-b">👻</span>
+      <span className="fx-ghost fx-ghost-a">{floatingSymbol}</span>
+      <span className="fx-ghost fx-ghost-b">{floatingSymbol}</span>
       <svg className="fx-bolt fx-bolt-a" viewBox="0 0 100 160">
         <path d="M62 0 L28 78 L52 78 L34 160 L84 62 L58 62 L78 0Z" />
       </svg>

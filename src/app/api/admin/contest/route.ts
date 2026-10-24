@@ -1,16 +1,25 @@
 import type { NextRequest } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
-import { audit, getContest, query, queryOne } from "@/lib/db";
+import { audit, getContest, query } from "@/lib/db";
 import { fail, json, logError, readJson } from "@/lib/http";
 import { lastStartAt } from "@/lib/status";
 import { formatInZone, isValidTimezone, utcToZonedLocal, zonedLocalToUtcIso } from "@/lib/time";
 
 async function view() {
   const c = await getContest();
-  const winner = await queryOne<{ attempt_id: string; selected_at: string; entry_ref: string | null }>(
-    "select w.attempt_id, w.selected_at, a.entry_ref from winners w left join attempts a on a.id = w.attempt_id where w.contest_id = $1",
+  const rankedWinners = await query<{ attempt_id: string; selected_at: string; entry_ref: string | null; entry_number: number; position: number }>(
+    `select w.attempt_id, w.selected_at, w.position, a.entry_ref, a.entry_number from winners w
+     join (select id, entry_ref, row_number() over (order by started_at, id)::int as entry_number
+           from attempts where contest_id = $1) a on a.id = w.attempt_id where w.contest_id = $1 order by w.position, w.selected_at, w.attempt_id`,
     [c.id],
   );
+  const winners = rankedWinners.map((winner) => ({
+    attemptId: winner.attempt_id,
+    selectedAt: winner.selected_at,
+    entryRef: winner.entry_ref,
+    entryNumber: winner.entry_number,
+    position: winner.position,
+  }));
   return {
     id: c.id,
     title: c.title,
@@ -23,13 +32,8 @@ async function view() {
     lastStartText: c.closes_at ? formatInZone(lastStartAt(c), c.timezone) : "—",
     entryOpen: c.entry_open,
     allowRepeatAttempts: c.allow_repeat_attempts,
-    winner: winner
-      ? {
-          attemptId: winner.attempt_id,
-          selectedAt: winner.selected_at,
-          entryRef: winner.entry_ref,
-        }
-      : null,
+    winner: winners.find((winner) => winner.position === 1) ?? null,
+    winners,
   };
 }
 

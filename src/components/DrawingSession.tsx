@@ -14,6 +14,8 @@ import { floodRuns } from "@/lib/fill";
 import { BRUSH_STYLES, paintShapes, previewSvg, sampleSvg, strokeShapes, type StyleId } from "@/lib/brushes";
 import { MAX_TEXT_LENGTH, MAX_TEXT_LINES, SHAPES, paintShape, paintText, shapeIconPath, shapeSvg, textSvg, type ShapeId } from "@/lib/shapes";
 import ColorSheet from "./ColorSheet";
+import LobbyAudio from "./LobbyAudio";
+import { recoveryKey } from "@/lib/drawing-recovery";
 
 type Tool = "pencil" | "brush" | "eraser" | "fill" | "picker" | "zoom" | "text" | "select" | "shape";
 type ShapeMode = "outline" | "both" | "fill";
@@ -50,16 +52,6 @@ const ICONS = {
 
 type SaveState = "saving" | "saved" | "offline" | "failed";
 type Mode = "loading" | "editing" | "readonly" | "locked";
-
-const recoveryKey = (attemptId: string) => `hw_recovery_${attemptId}`;
-
-export function clearRecoveryCopies() {
-  try {
-    Object.keys(localStorage)
-      .filter((k) => k.startsWith("hw_recovery_"))
-      .forEach((k) => localStorage.removeItem(k));
-  } catch {}
-}
 
 const fmt = (ms: number) => {
   const s = Math.max(0, Math.ceil(ms / 1000));
@@ -936,6 +928,7 @@ export default function DrawingSession({ onFinished }: { onFinished: () => void 
       onDrop={(e) => e.preventDefault()}
       onDragOver={(e) => e.preventDefault()}
     >
+      <LobbyAudio active={mode === "editing" || mode === "readonly"} src="/drawing.mp3" />
       {/* Top bar: timer, undo/redo, submit — always visible, never over the canvas */}
       <div className="draw-edge" aria-hidden="true" />
       <span className="draw-bat" aria-hidden="true">🦇</span>
