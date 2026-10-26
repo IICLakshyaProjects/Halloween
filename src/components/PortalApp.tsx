@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import dynamic from "next/dynamic";
+import Image from "next/image";
 import { ID_PREFIX } from "@/lib/constants";
 import { validateName, validateSuffix } from "@/lib/validation";
 import { clearRecoveryCopies } from "@/lib/drawing-recovery";
@@ -142,8 +143,7 @@ function WelcomeModal({ onNext }: { onNext: () => void }) {
   return (
     <dialog open className="welcome-overlay" aria-labelledby="welcome-title" onCancel={(event) => event.preventDefault()}>
       <section className="welcome-modal">
-        <span className="welcome-pumpkin" aria-hidden="true">🎃</span>
-        <p className="welcome-kicker">IIC Lakshya presents</p>
+        <Image className="welcome-pumpkin" src="/pum.jpg" alt="" aria-hidden="true" width={140} height={140} priority />
         <h1 id="welcome-title" className="spooky-title welcome-title">Welcome to IIC Lakshya Halloween</h1>
         <button className="btn btn-primary welcome-next" autoFocus onClick={onNext}>
           Next <span aria-hidden="true">→</span>
