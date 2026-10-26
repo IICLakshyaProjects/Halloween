@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import dynamic from "next/dynamic";
+import Image from "next/image";
 import { ID_PREFIX } from "@/lib/constants";
 import { validateName, validateSuffix } from "@/lib/validation";
 import { clearRecoveryCopies } from "@/lib/drawing-recovery";
 import HalloweenFx from "./HalloweenFx";
-import LobbyAudio from "./LobbyAudio";
+import LobbyAudio, { type LobbyAudioHandle } from "./LobbyAudio";
 
 const DrawingSession = dynamic(() => import("./DrawingSession"), {
   loading: () => <p className="muted" role="status">Opening your drawing workspace…</p>,
@@ -24,6 +25,9 @@ type Attempt =
       completedAtText: string;
       isTest: boolean;
     };
+
+const SIGN_IN_TRACKS = ["/theojt-spooky-music-theme-121127.mp3", "/1.mp3"];
+const LOGGED_IN_TRACKS = ["/2.mp3", "/3.mp3"];
 
 type Status =
   | { authenticated: false }
@@ -46,6 +50,14 @@ export default function PortalApp() {
   const [loginFlash, setLoginFlash] = useState(false);
   const [contestStarted, setContestStarted] = useState(false);
   const [justSubmitted, setJustSubmitted] = useState(false);
+  const [welcomeOpen, setWelcomeOpen] = useState(true);
+  const lobbyAudioRef = useRef<LobbyAudioHandle>(null);
+
+  const continueFromWelcome = () => {
+    // This is deliberately called in the button's trusted click event so browsers allow sound.
+    lobbyAudioRef.current?.play();
+    setWelcomeOpen(false);
+  };
 
   const load = useCallback(async () => {
     try {
@@ -78,7 +90,11 @@ export default function PortalApp() {
   // Returning participants can start again when permitted; finishing a drawing still shows only its receipt.
   const showConfirmation = status.authenticated && status.attempt?.kind === "finalized" && (!status.canStart || justSubmitted);
   const lobbyEffects = <>
-    <LobbyAudio active={!contestStarted && !drawing && !showConfirmation} />
+    <LobbyAudio
+      ref={lobbyAudioRef}
+      active={welcomeOpen === false && !contestStarted && !drawing && !showConfirmation}
+      tracks={status.authenticated ? LOGGED_IN_TRACKS : SIGN_IN_TRACKS}
+    />
     {loginFlash && <div className="login-success-storm" aria-hidden="true" onAnimationEnd={(event) => { if (event.target === event.currentTarget) setLoginFlash(false); }}>
       <svg className="login-corner-left" viewBox="0 0 100 160"><path d="M62 0 28 78H52L34 160 84 62H58L78 0Z" /></svg>
       <svg className="login-corner-right" viewBox="0 0 100 160"><path d="M62 0 28 78H52L34 160 84 62H58L78 0Z" /></svg>
@@ -89,7 +105,7 @@ export default function PortalApp() {
     setLoginFlash(true);
     // Warm the editor during the rules screen, without adding it to the initial sign-in bundle.
     void import("./DrawingSession").catch(() => {});
-  }} /></>;
+  }} />{welcomeOpen && <WelcomeModal onNext={continueFromWelcome} />}</>;
 
   return (
     <>
@@ -118,7 +134,22 @@ export default function PortalApp() {
         <Rules status={status} onStarted={load} onStartAccepted={() => setContestStarted(true)} />
       )}
     </div>
+    {welcomeOpen && <WelcomeModal onNext={continueFromWelcome} />}
     </>
+  );
+}
+
+function WelcomeModal({ onNext }: { onNext: () => void }) {
+  return (
+    <dialog open className="welcome-overlay" aria-labelledby="welcome-title" onCancel={(event) => event.preventDefault()}>
+      <section className="welcome-modal">
+        <Image className="welcome-pumpkin" src="/pum.jpg" alt="" aria-hidden="true" width={140} height={140} priority />
+        <h1 id="welcome-title" className="spooky-title welcome-title">Welcome to IIC Lakshya Halloween</h1>
+        <button className="btn btn-primary welcome-next" autoFocus onClick={onNext}>
+          Next <span aria-hidden="true">→</span>
+        </button>
+      </section>
+    </dialog>
   );
 }
 
