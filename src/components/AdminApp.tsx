@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { Stroke } from "@/lib/constants";
+import { renderDrawingCanvas } from "@/lib/drawing-canvas";
 
 type Contest = {
   title: string; instructions: string; timezone: string;
@@ -11,7 +13,6 @@ type Contest = {
 };
 type Dashboard = {
   counts: { participants: number; activeAttempts: number; officialSubmissions: number; expiredEmpty: number; testAttempts: number };
-  audit: { id: number; admin_id: string; action: string; prior_value: unknown; new_value: unknown; createdAtText: string }[];
 };
 type Entry = { id: string; entryRef: string; entryNumber: number; participant: { name: string; employeeId: string }; state: string; isTest: boolean; completionMethod: string | null; completedAtText: string | null; hasDrawing: boolean; isWinner: boolean; winnerPosition: number | null };
 type RankedEntry = Entry & { winnerPosition: number };
@@ -154,20 +155,6 @@ function DashboardTab({ contest, reload, onChooseWinner }: { contest: Contest; r
         </div>
         <button className="btn mt-3" onClick={onChooseWinner}>{contest.winners.length ? "Manage winners" : "Select winners"}</button>
       </section>
-      <details className="card overflow-x-auto">
-        <summary className="cursor-pointer text-xl font-bold">Activity log</summary>
-        <table className="w-full text-left text-sm">
-          <thead><tr className="muted"><th className="p-1">When</th><th className="p-1">Admin</th><th className="p-1">Action</th><th className="p-1">Change</th></tr></thead>
-          <tbody>
-            {(data?.audit ?? []).map((a) => (
-              <tr key={a.id} className="border-t border-[var(--border)]">
-                <td className="p-1">{a.createdAtText}</td><td className="p-1 font-mono">{a.admin_id.slice(0, 8)}</td><td className="p-1">{a.action}</td>
-                <td className="p-1 font-mono">{a.prior_value !== null && a.prior_value !== undefined ? `${JSON.stringify(a.prior_value)} → ` : ""}{a.new_value !== null && a.new_value !== undefined ? JSON.stringify(a.new_value) : ""}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </details>
     </div>
   );
 }
@@ -208,6 +195,7 @@ function EntriesTab({ contest, reload }: { contest: Contest; reload: () => Promi
   const [q, setQ] = useState("");
   const [query, setQuery] = useState("");
   const [error, setError] = useState("");
+  const [downloadError, setDownloadError] = useState("");
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState<Entry | null>(null);
   const requestId = useRef(0);
@@ -231,6 +219,25 @@ function EntriesTab({ contest, reload }: { contest: Contest; reload: () => Promi
     return () => { requestId.current++; };
   }, [load]);
   const pages = Math.max(1, Math.ceil(total / 24));
+  const downloadDrawing = async (entry: Entry) => {
+    setDownloadError("");
+    try {
+      const drawing = await api<{ strokes: Stroke[]; width: number; height: number }>(`/api/admin/entries/${entry.id}/preview?canvas-data=1`);
+      if (!Array.isArray(drawing.strokes)) throw new Error("Drawing data is invalid.");
+      const canvas = renderDrawingCanvas(drawing.strokes, drawing.width, drawing.height);
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((file) => file ? resolve(file) : reject(new Error("Could not create the drawing download.")), "image/png");
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `entry-${entry.entryNumber}-drawing.png`;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e) {
+      setDownloadError(e instanceof Error ? e.message : "Could not download the drawing.");
+    }
+  };
 
   return (
     <div className="flex flex-col gap-5">
@@ -243,6 +250,7 @@ function EntriesTab({ contest, reload }: { contest: Contest; reload: () => Promi
         {(query || status !== "completed") && <button type="button" className="btn" onClick={() => { setQ(""); setQuery(""); setStatus("completed"); setPage(1); }}>Reset filters</button>}
       </form>
       {error && <div role="alert" className="banner banner-bad">{error} <button className="btn" onClick={() => void load()}>Retry</button></div>}
+      {downloadError && <div role="alert" className="banner banner-bad">{downloadError}</div>}
       {loading ? <p role="status" className="admin-empty muted">Opening the gallery…</p> : !error && <>
         <p className="muted text-sm">{total} {total === 1 ? "entry" : "entries"} · Newest first</p>
         <ul className="admin-gallery">
@@ -259,12 +267,15 @@ function EntriesTab({ contest, reload }: { contest: Contest; reload: () => Promi
                 <div className="admin-section-heading"><h3 className="text-lg font-bold">Entry {en.entryNumber}</h3><span className="admin-badge">{STATE_LABEL[en.state] ?? en.state}</span></div>
                 <div className="admin-participant"><p className="font-semibold">{en.participant.name}</p><p className="muted font-mono text-xs">{en.participant.employeeId}</p></div>
                 <p className="muted text-xs">{en.completedAtText ?? "Drawing in progress"}</p>
-                <button className={`btn admin-review-btn ${en.isWinner ? "btn-primary" : ""}`} onClick={() => setOpen(en)}><span aria-hidden="true">{en.isWinner ? "🏆" : "🔍"}</span>{en.isWinner ? "View winner" : "Review & select winner"}</button>
+                <div className="admin-entry-actions">
+                  <button className={`btn admin-review-btn ${en.isWinner ? "btn-primary" : ""}`} onClick={() => setOpen(en)}><span aria-hidden="true">{en.isWinner ? "🏆" : "🔍"}</span>{en.isWinner ? "View winner" : "Review & select winner"}</button>
+                  {en.hasDrawing && <button type="button" className="btn admin-review-btn admin-download-btn" onClick={() => void downloadDrawing(en)} aria-label={`Download drawing for Entry ${en.entryNumber}`} title="Download drawing"><svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="m7 10 5 5 5-5M12 15V3" /></svg></button>}
+                </div>
               </div>
             </li>
           ))}
         </ul>
-        {!entries.length && <div className="card admin-empty"><span aria-hidden="true" className="text-4xl">👻</span><h3 className="mt-3 text-lg font-bold">{status === "completed" && !query ? "No submitted entries yet" : "No matching entries"}</h3><p className="muted mt-1">{status === "completed" && !query ? "Submitted drawings will appear here. Choose another status to view other entries." : "Try another search or choose a different status."}</p></div>}
+        {!entries.length && <div className="card admin-empty"><span aria-hidden="true" className="text-4xl">🎃</span><h3 className="mt-3 text-lg font-bold">{status === "completed" && !query ? "No submitted entries yet" : "No matching entries"}</h3><p className="muted mt-1">{status === "completed" && !query ? "Submitted drawings will appear here. Choose another status to view other entries." : "Try another search or choose a different status."}</p></div>}
       </>}
       <div className="admin-pagination">
         <button className="btn" disabled={loading || page <= 1} onClick={() => setPage(page - 1)}>← Previous</button>
@@ -326,8 +337,10 @@ function EntryDialog({ entry, rankedWinners, onClose, onChanged }: { entry: Entr
       <div className="admin-dialog-header"><div><p className="admin-eyebrow">ARTWORK REVIEW</p><h2 id="entry-title" className="text-2xl font-bold">Entry {entry.entryNumber} {currentPosition && `🏆 ${placeLabel(currentPosition)}`}</h2></div><button className="btn" onClick={onClose} disabled={busy} autoFocus>Close</button></div>
       <div className="admin-dialog-art">
         {entry.hasDrawing ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={`/api/admin/entries/${entry.id}/preview`} alt={`Full drawing for Entry ${entry.entryNumber}`} />
+          <div className="admin-dialog-canvas">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={`/api/admin/entries/${entry.id}/preview`} alt={`Full drawing for Entry ${entry.entryNumber}`} />
+          </div>
         ) : <p className="muted p-10">No drawing yet.</p>}
       </div>
       <div className="admin-dialog-footer flex flex-col gap-3">

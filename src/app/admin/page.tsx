@@ -9,7 +9,7 @@ export default function AdminPage() {
     <main className="admin-stage flex-1">
       <div className="admin-atmosphere" aria-hidden="true">
         <div className="admin-moon" />
-        <HalloweenFx />
+        <HalloweenFx floatingSymbol="🎃" />
         <div className="admin-embers">
           {Array.from({ length: 7 }, (_, i) => <span key={i} />)}
         </div>

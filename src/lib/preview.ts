@@ -4,9 +4,9 @@ import { shapesToSvg, strokeShapes } from "./brushes";
 import { shapeSvg, textSvg } from "./shapes";
 import { query, queryOne } from "./db";
 
-/** Fixed white background, fixed orientation. Eraser strokes are white, matching the canvas. */
+/** White canvas with the saved dimensions; drawing content stays within its canvas bounds. */
 export function renderSvg(strokes: Stroke[], width = CANVAS_WIDTH, height = CANVAS_HEIGHT) {
-  let body = `<rect width="100%" height="100%" fill="#ffffff"/>`;
+  let body = `<rect width="${width}" height="${height}" fill="#ffffff"/>`;
   let defs = "";
   let layer = 0;
   for (const s of strokes) {
@@ -30,7 +30,8 @@ export function renderSvg(strokes: Stroke[], width = CANVAS_WIDTH, height = CANV
     else if (s.tool === "text") body += textSvg(s);
     else body += shapesToSvg(strokeShapes(s), s.tool === "eraser" ? "#ffffff" : s.color);
   }
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">${defs ? `<defs>${defs}</defs>` : ""}${body}</svg>`;
+  defs += `<clipPath id="canvas-boundary" clipPathUnits="userSpaceOnUse"><rect x="0" y="0" width="${width}" height="${height}"/></clipPath>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" preserveAspectRatio="xMidYMid meet"><defs>${defs}</defs><g clip-path="url(#canvas-boundary)">${body}</g></svg>`;
 }
 
 /** Idempotent: regenerates from saved data; never alters the drawing itself. */
@@ -40,7 +41,7 @@ export async function generatePreview(attemptId: string): Promise<boolean> {
     [attemptId],
   );
   if (!d) return false;
-  await query("update drawings set preview_svg = $2 where attempt_id = $1", [attemptId, renderSvg(d.strokes)]);
+  await query("update drawings set preview_svg = $2 where attempt_id = $1", [attemptId, renderSvg(d.strokes, d.width, d.height)]);
   return true;
 }
 
@@ -50,5 +51,14 @@ export async function loadPreviewSvg(attemptId: string): Promise<string | null> 
     [attemptId],
   );
   if (!d) return null;
-  return d.preview_svg ?? renderSvg(d.strokes, d.width, d.height);
+  const expectedStart = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${d.width} ${d.height}" width="${d.width}" height="${d.height}" preserveAspectRatio="xMidYMid meet">`;
+  return d.preview_svg?.startsWith(expectedStart) ? d.preview_svg : renderSvg(d.strokes, d.width, d.height);
+}
+
+export async function loadDrawingSvg(attemptId: string): Promise<string | null> {
+  const d = await queryOne<{ strokes: Stroke[]; width: number; height: number }>(
+    "select strokes, width, height from drawings where attempt_id = $1",
+    [attemptId],
+  );
+  return d ? renderSvg(d.strokes, d.width, d.height) : null;
 }

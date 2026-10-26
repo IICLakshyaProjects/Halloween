@@ -10,9 +10,10 @@ import {
   type DrawOp,
   type Stroke,
 } from "@/lib/constants";
+import { paintStroke } from "@/lib/drawing-canvas";
 import { floodRuns } from "@/lib/fill";
-import { BRUSH_STYLES, paintShapes, previewSvg, sampleSvg, strokeShapes, type StyleId } from "@/lib/brushes";
-import { MAX_TEXT_LENGTH, MAX_TEXT_LINES, SHAPES, paintShape, paintText, shapeIconPath, shapeSvg, textSvg, type ShapeId } from "@/lib/shapes";
+import { BRUSH_STYLES, previewSvg, sampleSvg, type StyleId } from "@/lib/brushes";
+import { MAX_TEXT_LENGTH, MAX_TEXT_LINES, SHAPES, shapeIconPath, shapeSvg, textSvg, type ShapeId } from "@/lib/shapes";
 import ColorSheet from "./ColorSheet";
 import LobbyAudio from "./LobbyAudio";
 import { recoveryKey } from "@/lib/drawing-recovery";
@@ -57,40 +58,6 @@ const fmt = (ms: number) => {
   const s = Math.max(0, Math.ceil(ms / 1000));
   return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 };
-
-function paintStroke(ctx: CanvasRenderingContext2D, s: Stroke) {
-  if (s.tool === "fill") {
-    // One path so adjacent spans never leave hairline seams at fractional scales.
-    const r = s.runs ?? [];
-    ctx.fillStyle = s.color;
-    ctx.beginPath();
-    for (let i = 0; i + 2 < r.length; i += 3) ctx.rect(r[i + 1], r[i], r[i + 2] - r[i + 1] + 1, 1);
-    ctx.fill();
-    return;
-  }
-  if (s.tool === "shape") return paintShape(ctx, s);
-  if (s.tool === "text") return paintText(ctx, s);
-  if (s.tool === "move") {
-    // Copy the selected pixels (as they are at this point in the drawing) and paste them offset; a move also blanks the source.
-    const k = ctx.getTransform().a;
-    const [x, y, w, h] = s.rect ?? [0, 0, 0, 0];
-    const sx = Math.round(x * k), sy = Math.round(y * k), sw = Math.max(1, Math.round(w * k)), sh = Math.max(1, Math.round(h * k));
-    const tmp = document.createElement("canvas");
-    tmp.width = sw;
-    tmp.height = sh;
-    tmp.getContext("2d")!.drawImage(ctx.canvas, sx, sy, sw, sh, 0, 0, sw, sh);
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    if (!s.copy) {
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(sx, sy, sw, sh);
-    }
-    ctx.drawImage(tmp, Math.round((x + (s.dx ?? 0)) * k), Math.round((y + (s.dy ?? 0)) * k));
-    ctx.restore();
-    return;
-  }
-  paintShapes(ctx, strokeShapes(s), s.tool === "eraser" ? "#ffffff" : s.color);
-}
 
 function applyOps(strokes: Stroke[], ops: DrawOp[]) {
   let out = strokes;
