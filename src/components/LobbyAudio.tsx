@@ -1,58 +1,71 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 
-const LOBBY_TRACKS = ["/theojt-spooky-music-theme-121127.mp3", "/first.mp3"];
+const DEFAULT_TRACKS = ["/theojt-spooky-music-theme-121127.mp3", "/1.mp3"];
 
-/** The lobby alternates its tracks; an explicit source loops by itself during drawing. */
-export default function LobbyAudio({ active, src }: { active: boolean; src?: string }) {
+export type LobbyAudioHandle = {
+  play: () => void;
+};
+
+/** Plays a lobby playlist in order, returning to its first track after the last one. */
+const LobbyAudio = forwardRef<LobbyAudioHandle, { active: boolean; src?: string; tracks?: string[] }>(function LobbyAudio({ active, src, tracks }, ref) {
   const audioRef = useRef<HTMLAudioElement>(null);
+  const activeTracks = useMemo(() => src ? [src] : tracks ?? DEFAULT_TRACKS, [src, tracks]);
+  const playlistKey = activeTracks.join("|");
+  const [trackIndex, setTrackIndex] = useState(0);
+  const currentTrack = activeTracks[trackIndex] ?? activeTracks[0];
+
+  useEffect(() => {
+    setTrackIndex(0);
+  }, [playlistKey]);
+
+  useImperativeHandle(ref, () => ({
+    play: () => {
+      const audio = audioRef.current;
+      if (!audio) return;
+      audio.muted = false;
+      void audio.play().catch(() => {
+        // The active-state handler retries on the next trusted interaction if needed.
+      });
+    },
+  }), []);
 
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
-    audio.volume = 0.6;
+    audio.volume = src ? 0.6 : 0.35;
     audio.muted = false;
     if (!active) {
       audio.pause();
       audio.currentTime = 0;
       return;
     }
-    let pending = false;
-    let disposed = false;
-    const tracks = src ? [src] : LOBBY_TRACKS;
-    let trackIndex = 0;
     const start = () => {
-      if (disposed || pending || !audio.paused) return;
-      pending = true;
-      void audio.play().catch(() => {
-        // A blocked autoplay attempt is retried on the next trusted interaction.
-      }).finally(() => { pending = false; });
+      if (audio.paused) {
+        void audio.play().catch(() => {
+          // A blocked autoplay attempt is retried on the next trusted interaction.
+        });
+      }
     };
-    const nextTrack = () => {
-      if (disposed) return;
-      trackIndex = (trackIndex + 1) % tracks.length;
-      audio.src = tracks[trackIndex];
-      audio.load();
-      start();
-    };
-    audio.addEventListener("canplay", start);
-    audio.addEventListener("ended", nextTrack);
-    // Playback permission comes from the visitor's first interaction when autoplay is blocked.
     const gestures = ["pointerdown", "pointerup", "keydown", "click", "touchend"] as const;
+    audio.addEventListener("canplay", start);
     gestures.forEach((event) => document.addEventListener(event, start, { capture: true, passive: true }));
-    // Keep one audio element alive across login and rules, preserving playback permission.
-    audio.src = tracks[0];
-    audio.load();
     start();
     return () => {
-      disposed = true;
       audio.removeEventListener("canplay", start);
-      audio.removeEventListener("ended", nextTrack);
       gestures.forEach((event) => document.removeEventListener(event, start, true));
       audio.pause();
     };
-  }, [active, src]);
+  }, [active, currentTrack, src]);
 
-  return <audio ref={audioRef} src={src ?? LOBBY_TRACKS[0]} autoPlay={active} loop={!!src} preload={active ? "auto" : "none"} hidden />;
-}
+  const playNextTrack = () => {
+    if (activeTracks.length > 1) setTrackIndex((index) => (index + 1) % activeTracks.length);
+  };
+
+  return <audio key={currentTrack} ref={audioRef} src={currentTrack} autoPlay={active} loop={activeTracks.length === 1} onEnded={playNextTrack} preload={active ? "auto" : "none"} hidden />;
+});
+
+LobbyAudio.displayName = "LobbyAudio";
+
+export default LobbyAudio;

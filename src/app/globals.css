@@ -64,6 +64,68 @@ body {
 .btn-danger { border-color: var(--danger); color: var(--danger); }
 .btn[aria-pressed="true"] { outline: 2px solid var(--accent); }
 
+/* First-visit welcome: the Next action is also the user's audio-start gesture. */
+.welcome-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  display: grid; place-items: center; padding: 1.25rem;
+  width: 100dvw; height: 100dvh; max-width: none; max-height: none; margin: 0; border: 0;
+  /* Keep the welcome prompt visually separate from the login page behind it. */
+  background: #08050d;
+}
+.welcome-modal {
+  display: flex; flex-direction: column; align-items: center; gap: 1.25rem;
+  width: min(100%, 510px); padding: clamp(2rem, 6vw, 3.5rem) clamp(1.5rem, 6vw, 3rem);
+  border: 1px solid #bc7648; border-radius: 24px;
+  background: radial-gradient(ellipse at 50% 0%, #71361f66, transparent 55%), linear-gradient(145deg, #2b1838, #130b1e);
+  box-shadow: 0 0 0 6px #ff751814, 0 26px 80px #000a; text-align: center;
+}
+.welcome-pumpkin { font-size: clamp(3.5rem, 10vw, 5.5rem); line-height: 1; filter: drop-shadow(0 0 22px #ff751899); }
+.welcome-kicker { color: #ffc28f; font-size: .72rem; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; }
+.welcome-title { color: #ffe0bb; font-size: clamp(2rem, 7vw, 3.25rem); line-height: 1.1; text-shadow: 0 0 24px #ff751855; }
+.welcome-next { min-width: 140px; box-shadow: 0 5px 22px #ff75184d; }
+
+/* Final-submission prompt: a contained blood-drip effect that does not affect the canvas. */
+.submit-challenge-modal {
+  position: relative; width: min(92vw, 680px); max-width: 680px; min-height: 510px; overflow: hidden;
+  padding: 245px 2.5rem 2.5rem; border-color: #7e1823;
+  background: radial-gradient(ellipse at 50% 0%, #4a0c172b, transparent 58%), linear-gradient(155deg, #10060a, #030204 75%);
+  box-shadow: 0 22px 70px #000, inset 0 1px #9f263022;
+}
+.submit-challenge-modal > :not(.blood-drips) { position: relative; z-index: 1; }
+.submit-challenge-modal h2 { color: #f0a5aa; font-family: var(--font-spooky), Georgia, serif; font-size: clamp(2rem, 5vw, 3.1rem); font-weight: 800; line-height: 1; letter-spacing: .05em; text-shadow: 0 0 20px #9f192b99; }
+.submit-challenge-quote { color: #d5a0a5; font-family: Georgia, "Times New Roman", serif; font-size: clamp(1.15rem, 2.5vw, 1.55rem); font-weight: 800; line-height: 1.35; text-shadow: 0 2px 12px #000; }
+.submit-challenge-modal .btn-primary { border-color: #b42a36; background: linear-gradient(135deg, #a51e2b, #5e0b15); color: #ffe5df; box-shadow: 0 4px 16px #8f122855; }
+.submit-challenge-modal .btn:not(.btn-primary) { border-color: #43232a; background: #160d12; color: #d7c1c3; }
+.blood-drips { position: absolute; inset: 0 0 auto; z-index: 0; height: 105px; overflow: hidden; pointer-events: none; background: linear-gradient(90deg, #6f1018, #a31824 26%, #5e0d16 52%, #991923 77%, #641019); opacity: .85; }
+.blood-drips::before { content: ""; position: absolute; inset: auto 0 -12px; height: 25px; background: radial-gradient(18px 15px at 7% 0, #86111c 96%, transparent 100%), radial-gradient(22px 17px at 23% 0, #9e1721 96%, transparent 100%), radial-gradient(15px 12px at 42% 0, #6a0e17 96%, transparent 100%), radial-gradient(23px 18px at 63% 0, #971721 96%, transparent 100%), radial-gradient(16px 13px at 86% 0, #700e18 96%, transparent 100%); }
+.blood-drips span { position: absolute; top: 12px; width: 8px; border-radius: 0 0 8px 8px; background: linear-gradient(#b92630, #5c0912); transform-origin: top; animation: blood-flow 2.7s ease-in-out infinite; }
+.blood-drips span:nth-child(1) { left: 9%; height: 52px; animation-delay: -.4s; }
+.blood-drips span:nth-child(2) { left: 27%; height: 80px; animation-delay: -1.3s; }
+.blood-drips span:nth-child(3) { left: 43%; height: 44px; animation-delay: -2s; }
+.blood-drips span:nth-child(4) { left: 61%; height: 73px; animation-delay: -.9s; }
+.blood-drips span:nth-child(5) { left: 78%; height: 50px; animation-delay: -1.7s; }
+.blood-drips span:nth-child(6) { left: 92%; height: 86px; animation-delay: -.2s; }
+@keyframes blood-flow { 0%, 100% { transform: scaleY(.58); opacity: .68; } 50% { transform: scaleY(1.08); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .blood-drips span { animation: none; } }
+
+/* Natural blood texture with a restrained, continuous flowing motion. */
+.submission-blood-overlay { position: absolute; z-index: 0; top: 0; left: 0; width: 100%; height: 215px; object-fit: fill; pointer-events: none; transform-origin: top center; animation: submission-blood-flow 3.8s ease-in-out infinite; }
+@keyframes submission-blood-flow { 0%, 100% { transform: scaleY(1); filter: brightness(1); } 50% { transform: scaleY(1.08); filter: brightness(1.13); } }
+@media (prefers-reduced-motion: reduce) { .submission-blood-overlay { animation: none; } }
+@media (max-width: 540px), (max-height: 620px) {
+  .welcome-overlay { padding: .75rem; }
+  .welcome-modal { gap: 1rem; padding: 1.75rem 1.25rem; border-radius: 18px; }
+  .welcome-pumpkin { font-size: 3.5rem; }
+  .welcome-title { font-size: clamp(1.85rem, 10vw, 2.5rem); }
+  .submit-challenge-modal { width: calc(100vw - 1.25rem); min-height: 0; max-height: calc(100dvh - 1.25rem); padding: 180px 1.25rem 1.5rem; overflow-y: auto; }
+  .submission-blood-overlay { height: 165px; }
+  .submit-challenge-modal h2 { font-size: clamp(1.7rem, 9vw, 2.25rem); }
+  .submit-challenge-quote { font-size: clamp(1rem, 4.5vw, 1.2rem); }
+  .submit-actions { flex-direction: column; }
+  .submit-actions .btn { width: 100%; min-height: 48px; }
+}
+
+
 :focus-visible { outline: 3px solid #ffd2a8; outline-offset: 2px; }
 
 /* Admin gallery: scoped so participant and drawing screens keep their styling. */

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import {
   fitDims,
   MAX_BRUSH,
@@ -197,6 +198,7 @@ export default function DrawingSession({ onFinished }: { onFinished: () => void 
   const [message, setMessage] = useState<{ kind: "info" | "bad"; text: string } | null>(null);
   const [confirm, setConfirm] = useState<null | "submit" | "clear">(null);
   const [submitting, setSubmitting] = useState(false);
+  const submitToneRef = useRef<HTMLAudioElement>(null);
   const [, setWarning] = useState("");
   const warned = useRef({ five: false, one: false });
 
@@ -440,6 +442,14 @@ export default function DrawingSession({ onFinished }: { onFinished: () => void 
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
+        if (body?.error?.code === "out_of_sync" && Number.isInteger(body?.revision)) {
+          const revision = body.revision as number;
+          serverRev.current = revision;
+          pending.current = pending.current.map((op, index) => ({ ...op, seq: revision + index + 1 }));
+          persistLocal();
+          setTimeout(() => void flushRef.current(), 0);
+          return;
+        }
         handleSaveError(res.status, body?.error?.code ?? "", body?.error?.message ?? "Save failed.");
         return;
       }
@@ -864,6 +874,17 @@ export default function DrawingSession({ onFinished }: { onFinished: () => void 
     bump();
   };
 
+  const openSubmitConfirmation = () => {
+    const submitTone = submitToneRef.current;
+    if (submitTone) {
+      submitTone.currentTime = 0;
+      void submitTone.play().catch(() => {
+        // Opening the confirmation still works if the browser declines audio playback.
+      });
+    }
+    setConfirm("submit");
+  };
+
   const submit = async () => {
     if (!editing || submitting) return;
     setSubmitting(true);
@@ -928,7 +949,8 @@ export default function DrawingSession({ onFinished }: { onFinished: () => void 
       onDrop={(e) => e.preventDefault()}
       onDragOver={(e) => e.preventDefault()}
     >
-      <LobbyAudio active={mode === "editing" || mode === "readonly"} src="/drawing.mp3" />
+      <LobbyAudio active={(mode === "editing" || mode === "readonly") && confirm !== "submit"} src="/drawing.mp3" />
+      <audio ref={submitToneRef} src="/sound one.mp3" preload="auto" hidden />
       {/* Top bar: timer, undo/redo, submit — always visible, never over the canvas */}
       <div className="draw-edge" aria-hidden="true" />
       <span className="draw-bat" aria-hidden="true">🦇</span>
@@ -953,7 +975,7 @@ export default function DrawingSession({ onFinished }: { onFinished: () => void 
           <button className="icon-btn" aria-label="Redo" disabled={!editing || !counts.redo} onClick={redoStroke}>
             <Icon d={ICONS.redo} />
           </button>
-          <button className="btn btn-primary" disabled={!editing || submitting || !counts.pen} onClick={() => setConfirm("submit")}>
+          <button className="btn btn-primary" disabled={!editing || submitting || !counts.pen} onClick={openSubmitConfirmation}>
             Submit
           </button>
         </div>
@@ -1194,12 +1216,22 @@ export default function DrawingSession({ onFinished }: { onFinished: () => void 
 
       {confirm && (
         <div role="alertdialog" aria-modal="true" aria-label="Confirm" className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4">
-          <div className="card max-w-sm">
+          <div className={confirm === "submit" ? "card submit-challenge-modal" : "card max-w-sm"}>
             {confirm === "submit" ? (
               <>
-                <h2 className="mb-2 text-xl font-bold">Submit your drawing?</h2>
-                <p className="muted mb-4">This is final. {fmt(remaining)} left.</p>
-                <div className="flex gap-3">
+                <LobbyAudio active src="/3.mp3" />
+                <Image className="submission-blood-overlay" src="/submission-blood-drips.png" alt="" aria-hidden="true" width={400} height={215} unoptimized />
+                <svg className="blood-drips" aria-hidden="true" viewBox="0 0 400 245" preserveAspectRatio="none" style={{ display: "none" }}>
+                  <path fill="#7e1018" d="M0 0h400v30c-12 8-29 7-43 0v52c0 17-15 17-15 0V29c-15 8-32 9-48 2v107c0 20-18 20-18 0V30c-19 8-41 8-59 0v51c0 16-15 16-15 0V29c-18 8-35 8-55 1v152c0 23-20 23-20 0V30c-16 8-34 8-51 1v86c0 18-16 18-16 0V29c-15 7-30 7-46 0v55c0 17-14 17-14 0V29c-17 8-32 7-43 1Z">
+                    <animate attributeName="d" dur="3.2s" repeatCount="indefinite" values="M0 0h400v30c-12 8-29 7-43 0v52c0 17-15 17-15 0V29c-15 8-32 9-48 2v107c0 20-18 20-18 0V30c-19 8-41 8-59 0v51c0 16-15 16-15 0V29c-18 8-35 8-55 1v152c0 23-20 23-20 0V30c-16 8-34 8-51 1v86c0 18-16 18-16 0V29c-15 7-30 7-46 0v55c0 17-14 17-14 0V29c-17 8-32 7-43 1Z;M0 0h400v27c-12 5-29 5-43 0v77c0 20-15 20-15 0V28c-15 5-32 6-48 1v72c0 18-18 18-18 0V28c-19 5-41 5-59 0v79c0 19-15 19-15 0V28c-18 5-35 5-55 0v119c0 21-20 21-20 0V28c-16 5-34 5-51 0v109c0 20-16 20-16 0V28c-15 5-30 5-46 0v77c0 19-14 19-14 0V28c-17 5-32 5-43 0Z;M0 0h400v30c-12 8-29 7-43 0v52c0 17-15 17-15 0V29c-15 8-32 9-48 2v107c0 20-18 20-18 0V30c-19 8-41 8-59 0v51c0 16-15 16-15 0V29c-18 8-35 8-55 1v152c0 23-20 23-20 0V30c-16 8-34 8-51 1v86c0 18-16 18-16 0V29c-15 7-30 7-46 0v55c0 17-14 17-14 0V29c-17 8-32 7-43 1Z" />
+                  </path>
+                  <path fill="#b3212a" opacity=".66" d="M0 0h400v10c-53 8-96-3-145 3-69 9-116-4-160 2C-351 20-379 14-400 9V0Z" />
+                  <circle fill="#9f1620" cx="238" cy="210" r="3"><animate attributeName="cy" values="184;239" dur="1.8s" repeatCount="indefinite" /></circle>
+                  <circle fill="#a71923" cx="320" cy="175" r="2"><animate attributeName="cy" values="155;238" dur="2.4s" repeatCount="indefinite" /></circle>
+                </svg>
+                <h2 className="mb-2 text-xl font-bold">The seal is waiting.</h2>
+                <p className="submit-challenge-quote mb-4">Offer your drawing to the darkness, because once it is sealed there is no turning back.</p>
+                <div className="submit-actions flex gap-3">
                   <button className="btn btn-primary flex-1" disabled={submitting} onClick={() => void submit()} autoFocus>
                     {submitting ? "Submitting…" : "Submit"}
                   </button>

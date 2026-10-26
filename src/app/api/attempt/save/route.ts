@@ -37,6 +37,9 @@ export async function POST(req: NextRequest) {
       const [status, message] = ERRORS[code] ?? [400, "Could not save."];
       return fail(code, message, status, { state: data.state });
     }
+    if (data.gap) {
+      return fail("out_of_sync", "Some drawing changes arrived out of order. Resynchronizing…", 409, { revision: data.last_revision });
+    }
     return json({ ok: true, revision: data.last_revision, gap: data.gap === true, serverNow: new Date().toISOString() });
   } catch (e) {
     logError("save", e);
