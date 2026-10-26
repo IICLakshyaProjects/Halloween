@@ -81,7 +81,7 @@ body {
 }
 .welcome-pumpkin { font-size: clamp(3.5rem, 10vw, 5.5rem); line-height: 1; filter: drop-shadow(0 0 22px #ff751899); }
 .welcome-kicker { color: #ffc28f; font-size: .72rem; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; }
-.welcome-title { color: #ffe0bb; font-size: clamp(2rem, 7vw, 3.25rem); line-height: 1.1; text-shadow: 0 0 24px #ff751855; }
+.welcome-title { color: #fff4d6; font-family: var(--font-spooky), Georgia, serif; font-size: clamp(2.4rem, 8vw, 4rem); font-weight: 400; line-height: .94; letter-spacing: .035em; -webkit-text-stroke: 1.5px #3a102f; text-shadow: 2px 2px 0 #3a102f, 0 0 14px #ffb45a99, 0 0 28px #ff751866; }
 .welcome-next { min-width: 140px; box-shadow: 0 5px 22px #ff75184d; }
 
 /* Final-submission prompt: a contained blood-drip effect that does not affect the canvas. */
@@ -109,16 +109,14 @@ body {
 @media (prefers-reduced-motion: reduce) { .blood-drips span { animation: none; } }
 
 /* Natural blood texture with a restrained, continuous flowing motion. */
-.submission-blood-overlay { position: absolute; z-index: 0; top: 0; left: 0; width: 100%; height: 215px; object-fit: fill; pointer-events: none; transform-origin: top center; animation: submission-blood-flow 3.8s ease-in-out infinite; }
-@keyframes submission-blood-flow { 0%, 100% { transform: scaleY(1); filter: brightness(1); } 50% { transform: scaleY(1.08); filter: brightness(1.13); } }
-@media (prefers-reduced-motion: reduce) { .submission-blood-overlay { animation: none; } }
+.submission-ending-image { position: absolute !important; z-index: 0 !important; top: 0; left: 0; width: 100%; height: 215px; object-fit: cover; object-position: center 29%; pointer-events: none; filter: brightness(.68) saturate(.9) contrast(1.12); }
 @media (max-width: 540px), (max-height: 620px) {
   .welcome-overlay { padding: .75rem; }
   .welcome-modal { gap: 1rem; padding: 1.75rem 1.25rem; border-radius: 18px; }
   .welcome-pumpkin { font-size: 3.5rem; }
   .welcome-title { font-size: clamp(1.85rem, 10vw, 2.5rem); }
   .submit-challenge-modal { width: calc(100vw - 1.25rem); min-height: 0; max-height: calc(100dvh - 1.25rem); padding: 180px 1.25rem 1.5rem; overflow-y: auto; }
-  .submission-blood-overlay { height: 165px; }
+  .submission-ending-image { height: 165px; }
   .submit-challenge-modal h2 { font-size: clamp(1.7rem, 9vw, 2.25rem); }
   .submit-challenge-quote { font-size: clamp(1rem, 4.5vw, 1.2rem); }
   .submit-actions { flex-direction: column; }
